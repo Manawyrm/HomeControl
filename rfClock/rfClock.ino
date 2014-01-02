@@ -2,15 +2,24 @@
 #include <Mirf.h>
 #include <nRF24L01.h>
 #include <MirfHardwareSpiDriver.h>
-#include "Wire.h"
+#include "utility/RS5C372A.h"
 #include "TwoWireRTC.h"
+#include "utility/twi.h"
+#include "Wire.h"
 #include "DateTime.h"
 
-byte data[32];
+
+
+
+byte receiveBuffer[32];
+byte transmitBuffer[32];
+
+uint16_t ownAddress = 10;
 int latchPin = A2;
 int clockPin = A1;
 int dataPin = A0;
 DateTime time;
+
 byte numbers[] = {
 B11111101,
 B01100001,
@@ -35,20 +44,29 @@ uint8_t* buildAddress(uint16_t device)
 	tempAddr[4] = (device >> 8) & 0xFF;
 	return tempAddr;
 }
+uint8_t* buildAddress(uint8_t lowerByte, uint8_t upperByte)
+{
+	tempAddr[0] = 't';
+	tempAddr[1] = 'm';
+	tempAddr[2] = 'a';
+	tempAddr[3] = lowerByte;
+	tempAddr[4] = upperByte;
+	return tempAddr;
+}
 
 void setup()
 {
 	Serial.begin(9600);
 
-	Wire.begin();
-	RTC.begin();
-	pinMode(latchPin, OUTPUT);
-	pinMode(clockPin, OUTPUT);
-	pinMode(dataPin, OUTPUT);
+    Wire.begin();
+    RTC.begin();
+    pinMode(latchPin, OUTPUT);
+    pinMode(clockPin, OUTPUT);
+    pinMode(dataPin, OUTPUT);
 
 	Mirf.spi = &MirfHardwareSpi;   
 	Mirf.init();
-	Mirf.setRADDR(buildAddress(10));
+	Mirf.setRADDR(buildAddress(ownAddress));
 	Mirf.payload = 32;
 	Mirf.config();
 }
@@ -57,32 +75,37 @@ void loop()
 {
 	if(!Mirf.isSending() && Mirf.dataReady())
 	{
-		Mirf.getData(data);
-		DateTime newtime = DateTime(
-									data[0],
-									data[1],
-									data[2],
-									data[3],
-									data[4],
-									data[5],
-									data[6]
-									);
+		Mirf.getData(receiveBuffer);
+        DateTime newtime = DateTime(
+                                                        receiveBuffer[2],
+                                                        receiveBuffer[3],
+                                                        receiveBuffer[4],
+                                                        receiveBuffer[5],
+                                                        receiveBuffer[6],
+                                                        receiveBuffer[7],
+                                                        receiveBuffer[8]
+                                                        );
+
 		RTC.setTime(&newtime);
-		Serial.println((char *)data);
-		Mirf.setTADDR(buildAddress(0));
-		Mirf.send((byte *)"clockset                        ");
+		Mirf.setTADDR(buildAddress(receiveBuffer[0],receiveBuffer[1]));
+
+		memcpy(transmitBuffer,"  clockset                      ",32);
+		transmitBuffer[0] = ownAddress & 0xFF;
+		transmitBuffer[1] = (ownAddress >> 8) & 0xFF;
+		Mirf.send((byte *)transmitBuffer);
+
+
 		while(Mirf.isSending())	{}
 	}
+    RTC.getTime(&time);
+    digitalWrite(latchPin, LOW);
 
-	RTC.getTime(&time);
-	digitalWrite(latchPin, LOW);
-
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getSecond() % 10]);  //Sekunde 2
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getSecond() / 10]);  //Sekunde 1
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getMinute() % 10]);  //Minute 2
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getMinute() / 10]);  //Minute 1
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getHour() % 10]);  //Stunde 2
-	shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getHour() / 10]);  //Stunde 1
-	digitalWrite(latchPin, HIGH);
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getSecond() % 10]);  //Sekunde 2
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getSecond() / 10]);  //Sekunde 1
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getMinute() % 10]);  //Minute 2
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getMinute() / 10]);  //Minute 1
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getHour() % 10]);  //Stunde 2
+    shiftOut(dataPin, clockPin, MSBFIRST, ~numbers[(int)time.getHour() / 10]);  //Stunde 1
+    digitalWrite(latchPin, HIGH);
 	delay(100);
 }
