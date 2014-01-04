@@ -3,12 +3,15 @@
 #include <Mirf.h>
 #include <nRF24L01.h>
 #include <MirfHardwareSpiDriver.h>
-#define RX_BUFFER_CNT 4
+#include <EthernetUdp.h>
 
-void packetReceive();
+#define RX_BUFFER_CNT 4
+#define UDP_PORT 44425
 
 uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01 };
 EthernetServer server(80);
+EthernetUDP Udp;
+
 uint16_t transmitAddr;
 uint8_t payloadBuffer[33];
 
@@ -46,6 +49,20 @@ uint8_t getPacketSlotForReceiver(uint16_t device)
 	}
 	return false;
 }
+uint8_t getPacketSlot()
+{
+	for (uint8_t i = 0; i < RX_BUFFER_CNT; i++)
+	{
+		// Packet vorhanden
+		if (packetInputBuffer[i] != 0)
+		{
+			return i;
+		}
+		
+	}
+	return false;
+}
+
 uint8_t getPacketSlotForReceiver(uint8_t lowerByte, uint8_t upperByte)
 {
 	for (uint8_t i = 0; i < RX_BUFFER_CNT; i++)
@@ -101,9 +118,10 @@ uint8_t getNextEmptyBufferSlot()
 {
 	for (uint8_t i = 0; i < RX_BUFFER_CNT; i++)
 	{
-			Serial.print("Durchlauf: ");
+		/*	Serial.print("Durchlauf: ");
 			Serial.println(i);
 			Serial.println((word)packetInputBuffer[i], HEX);
+		*/
 
 		// Packet nicht vorhanden
 		if (packetInputBuffer[i] == 0)
@@ -132,8 +150,8 @@ void readPacketIntoBuffer()
 	uint8_t* receiveBuffer = (uint8_t *) malloc(32) ;
 	memset (receiveBuffer,0,32);
 	packetInputBuffer[emptySlot] = receiveBuffer;
-	Serial.print("allocating memory:");
-	Serial.println((word)packetInputBuffer[emptySlot], HEX);
+	/*Serial.print("allocating memory:");
+	Serial.println((word)packetInputBuffer[emptySlot], HEX);*/
     Mirf.getData((uint8_t *) receiveBuffer);
 	//receiveBuffer[32] = 0x00;
 }
@@ -151,6 +169,7 @@ void setup()
 		for(;;)
 			;
 	}
+	Udp.begin(UDP_PORT);
 	// IP erhalten. Bereitschaft via UART melden.
 	Serial.println("Got IP");
 
@@ -267,12 +286,12 @@ void loop()
 							}
 						}
 
-						char* packetData = (char*)packetInputBuffer[getPacketSlotForReceiver(transmitAddr)];
+						/*char* packetData = (char*)packetInputBuffer[getPacketSlotForReceiver(transmitAddr)];
 						for (int i = 0; i < 32; i++)
 						{
 							Serial.write(packetData[i]);
 						}
-						Serial.println();
+						Serial.println();*/
 
 						// An den TCP-Clienten (via HTTP) ausgeben
 						char* dataStorage = ((char *) packetInputBuffer[getPacketSlotForReceiver(transmitAddr)]);
@@ -281,8 +300,8 @@ void loop()
 							client.write(dataStorage[i]);
 						}
 
-						Serial.print("Der benutze Speicher: ");
-						Serial.println((word)packetInputBuffer[getPacketSlotForReceiver(transmitAddr)], HEX);
+						/*Serial.print("Der benutze Speicher: ");
+						Serial.println((word)packetInputBuffer[getPacketSlotForReceiver(transmitAddr)], HEX);*/
 
 						free(packetInputBuffer[getPacketSlotForReceiver(transmitAddr)]);
 						packetInputBuffer[getPacketSlotForReceiver(transmitAddr)] = 0;
@@ -303,7 +322,18 @@ void loop()
 		// Wenn Daten im Empfangspuffer sind -- einlesen.
 		if (Mirf.dataReady())
 		{
+			Serial.println("DATEN!");
 			readPacketIntoBuffer();
+			Serial.println("Gelesen.");
+			//delay(1000);
+			Serial.println("Versende.");
+			Udp.beginPacket(Ethernet.dnsServerIP(), UDP_PORT);
+			Udp.write((uint8_t *) packetInputBuffer[getPacketSlot()], 32);
+			Udp.endPacket();
+
+			Serial.println("loesche puffer.");
+			free(packetInputBuffer[getPacketSlot()]);
+			packetInputBuffer[getPacketSlot()] = 0;
 		}
 		
 }
