@@ -54,6 +54,28 @@ uint8_t* buildAddress(uint8_t lowerByte, uint8_t upperByte)
 	return tempAddr;
 }
 
+
+uint8_t generateChecksum(uint8_t* packet)
+{
+	uint8_t checksum = 0x42;
+	for(int i=0; i < 31; i++)
+	{
+	    checksum ^= packet[i];
+	}
+	return checksum;
+}
+
+uint8_t validateChecksum(uint8_t* packet)
+{
+	uint8_t checksum = 0x42;
+	for(int i=0; i < 31; i++)
+	{
+	    checksum ^= packet[i];
+	}
+	return (packet[31] == checksum);
+}
+
+
 void setup()
 {
 	Serial.begin(9600);
@@ -76,7 +98,10 @@ void loop()
 	if(!Mirf.isSending() && Mirf.dataReady())
 	{
 		Mirf.getData(receiveBuffer);
-        DateTime newtime = DateTime(
+
+		if (validateChecksum(receiveBuffer))
+		{
+			DateTime newtime = DateTime(
                                                         receiveBuffer[2],
                                                         receiveBuffer[3],
                                                         receiveBuffer[4],
@@ -86,16 +111,19 @@ void loop()
                                                         receiveBuffer[8]
                                                         );
 
-		RTC.setTime(&newtime);
-		Mirf.setTADDR(buildAddress(receiveBuffer[0],receiveBuffer[1]));
+			RTC.setTime(&newtime);
+			Mirf.setTADDR(buildAddress(receiveBuffer[0],receiveBuffer[1]));
 
-		memcpy(transmitBuffer,"  clockset                      ",32);
-		transmitBuffer[0] = ownAddress & 0xFF;
-		transmitBuffer[1] = (ownAddress >> 8) & 0xFF;
-		Mirf.send((byte *)transmitBuffer);
+			memcpy(transmitBuffer,"  clockset                      ",32);
+			transmitBuffer[0] = ownAddress & 0xFF;
+			transmitBuffer[1] = (ownAddress >> 8) & 0xFF;
+
+			transmitBuffer[31] = generateChecksum(transmitBuffer);
+			Mirf.send((byte *)transmitBuffer);
 
 
-		while(Mirf.isSending())	{}
+			while(Mirf.isSending())	{}
+		}
 	}
     RTC.getTime(&time);
     digitalWrite(latchPin, LOW);
