@@ -13,6 +13,8 @@ uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01 };
 EthernetServer server(80);
 EthernetUDP Udp;
 
+IPAddress homecontrolServer(10, 4, 3, 2); 
+
 uint16_t transmitAddr;
 uint8_t payloadBuffer[33];
 
@@ -377,7 +379,7 @@ void loop()
 		}
 		if (getPacketSlot() != 254)
 		{
-			Udp.beginPacket(Ethernet.dnsServerIP(), UDP_PORT);
+			Udp.beginPacket(homecontrolServer, UDP_PORT);
 			Udp.write((uint8_t *) packetInputBuffer[getPacketSlot()], 32);
 			Udp.endPacket();
 

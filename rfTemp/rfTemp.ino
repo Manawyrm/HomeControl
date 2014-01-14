@@ -12,6 +12,14 @@
 #define WAIT_SLEEPING	0
 #define WAIT_TEMP		1
 #define WAIT_ADC		2
+#define WAIT_SEND		3
+
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif 
 
 byte receiveBuffer[32];
 byte transmitBuffer[32];
@@ -37,7 +45,7 @@ uint8_t generateChecksum(uint8_t* packet)
 	uint8_t checksum = 0x42;
 	for(int i=0; i < 31; i++)
 	{
-	    checksum ^= packet[i];
+		checksum ^= packet[i];
 	}
 	return checksum;
 }
@@ -47,7 +55,7 @@ uint8_t validateChecksum(uint8_t* packet)
 	uint8_t checksum = 0x42;
 	for(int i=0; i < 31; i++)
 	{
-	    checksum ^= packet[i];
+		checksum ^= packet[i];
 	}
 	return (packet[31] == checksum);
 }
@@ -73,8 +81,10 @@ uint8_t* buildAddress(uint8_t lowerByte, uint8_t upperByte)
 
 void setup()
 {
-	pinMode(A3, OUTPUT); // LED
-	pinMode(A0, OUTPUT); // Funkchip VCC
+	cbi(ADCSRA, ADEN);
+
+	pinMode(A5, OUTPUT); // LED
+	pinMode(A4, OUTPUT); // Funkchip VCC
 	Serial.begin(9600);
 
 	MCUSR = MCUSR & B11110111;
@@ -117,6 +127,21 @@ void setup()
 	} 
 
 }
+void startADconversion()
+{
+	ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+	ADCSRA |= _BV(ADEN) | (1<<ADIE); 
+}
+long readVcc() 
+{
+	cbi(ADCSRA, ADEN);
+
+	long result;
+	result = ADCL;
+	result |= ADCH<<8;
+	result = 1126400L / result;
+	return result - 100; // OFfset?!
+}
 
 void loop()
 {
@@ -125,10 +150,6 @@ void loop()
 	{
 		// Gute Nacht!
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-		wdt_reset();
-		sleep_mode();
-
-		return;
 	}
 	
 	if ((state == WAIT_SLEEPING) && (sleepcounter == sleep_length))
@@ -141,24 +162,32 @@ void loop()
 
 		// Gute Nacht!
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-		wdt_reset();
-
-		// In ner Sekunde gehts weiter.
-		sleep_enable();
-        sleep_cpu();
-		return;
 	}
-	if (state == WAIT_TEMP)
+	if (state == WAIT_ADC)
 	{
+		startADconversion();
+		set_sleep_mode(SLEEP_MODE_ADC);
+		digitalWrite(A4, 0);
+		digitalWrite(A5, 1);
+
+		//if (!(ADCSRA & (1<<ADSC)))
+		//{
+		//	state = WAIT_SEND;
+		//}
+	}	
+	if (state == WAIT_SEND)
+	{ 
+		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+		digitalWrite(A4, 1);
+		digitalWrite(A5, 0);
 		// Sekunde vorbei, Messwerte sind fertig.		
 		float temp_float = readTemperature();
 		byte * temp = (byte *) &temp_float;
 
-		//long vcc_long = readVcc();
-		long vcc_long = 3444;
+		long vcc_long = readVcc();
+		//long vcc_long = 3444;
 		byte * vcc = (byte *) &vcc_long;
-
-	    // Sendepuffer mit Leerzeichen überschreiben
+		// Sendepuffer mit Leerzeichen überschreiben
 		memset(transmitBuffer,32,32);
 
 		// Eigene Adresse
@@ -177,19 +206,19 @@ void loop()
 		
 		// Aktueller Messwert
 		transmitBuffer[10] = temp[0];
-    	transmitBuffer[11] = temp[1];
-   		transmitBuffer[12] = temp[2];
-    	transmitBuffer[13] = temp[3]; 
+		transmitBuffer[11] = temp[1];
+		transmitBuffer[12] = temp[2];
+		transmitBuffer[13] = temp[3]; 
 		
 		// Betriebsspannung
 		transmitBuffer[14] = vcc[0];
-    	transmitBuffer[15] = vcc[1];
-   		transmitBuffer[16] = vcc[2];
-    	transmitBuffer[17] = vcc[3]; 
+		transmitBuffer[15] = vcc[1];
+		transmitBuffer[16] = vcc[2];
+		transmitBuffer[17] = vcc[3]; 
 
-    	transmitBuffer[31] = generateChecksum((uint8_t *)transmitBuffer);
+		transmitBuffer[31] = generateChecksum((uint8_t *)transmitBuffer);
 
-    	Mirf.setTADDR(buildAddress(0));
+		Mirf.setTADDR(buildAddress(0));
 		Mirf.send((byte *)transmitBuffer);
 		while(Mirf.isSending())	{}
 		Mirf.powerDown();
@@ -197,30 +226,12 @@ void loop()
 		// Fertig.  Gute Nacht!
 		state = WAIT_SLEEPING;
 		sleepcounter = 0;
-		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-		wdt_reset();
-		sleep_enable();
-        sleep_cpu();
-
-		return;
-
-	}	
-}
-long readVcc() {
-  long result;
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  delay(2); 
-  ADCSRA |= _BV(ADSC); 
-  while (bit_is_set(ADCSRA,ADSC))
-  {
-	set_sleep_mode(SLEEP_MODE_ADC);
-	sleep_enable();
-    sleep_cpu();  
 	}
-  result = ADCL;
-  result |= ADCH<<8;
-  result = 1126400L / result;
-  return result - 100; // OFfset?!
+	wdt_reset();
+	sleep_enable();
+	sleep_cpu();
+	digitalWrite(A4, 1);
+		digitalWrite(A5, 0);
 }
 
 ISR(WDT_vect)
@@ -231,7 +242,18 @@ ISR(WDT_vect)
 	{
 		sleepcounter++;
 	}
+	if (state == WAIT_TEMP)
+	{
+		state = WAIT_ADC;
+	}
 }
+ISR(ADC_vect)
+{
+	state = WAIT_SEND;
+	digitalWrite(A4, 1);
+	digitalWrite(A5, 1);
+}
+
 
 void startMeasure()
 {
