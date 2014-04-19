@@ -58,7 +58,7 @@ void setup()
 	Serial.begin(9600);
 
 
-	ownAddress = EEPROM.read(0) | (EEPROM.read(1) << 8);
+	ownAddress = 23;
 
 	Mirf.spi = &MirfHardwareSpi;   
 	Mirf.init();

@@ -8,6 +8,5 @@
         "1": 6
     }, 
     "serial_port": 2, 
-    "show_compilation_output": false, 
-    "show_upload_output": false
+    "show_upload_output": true
 }

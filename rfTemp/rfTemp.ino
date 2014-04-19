@@ -194,27 +194,29 @@ void loop()
 		transmitBuffer[0] = ownAddress & 0xFF;
 		transmitBuffer[1] = (ownAddress >> 8) & 0xFF;
 
+		transmitBuffer[2] = 0x02;
+
 		// 64bit Adresse des Sensors
-		transmitBuffer[2] = addr[0];
-		transmitBuffer[3] = addr[1];
-		transmitBuffer[4] = addr[2];
-		transmitBuffer[5] = addr[3];
-		transmitBuffer[6] = addr[4];
-		transmitBuffer[7] = addr[5];
-		transmitBuffer[8] = addr[6];
-		transmitBuffer[9] = addr[7];
+		transmitBuffer[3] = addr[0];
+		transmitBuffer[4] = addr[1];
+		transmitBuffer[5] = addr[2];
+		transmitBuffer[6] = addr[3];
+		transmitBuffer[7] = addr[4];
+		transmitBuffer[8] = addr[5];
+		transmitBuffer[9] = addr[6];
+		transmitBuffer[10] = addr[7];
 		
 		// Aktueller Messwert
-		transmitBuffer[10] = temp[0];
-		transmitBuffer[11] = temp[1];
-		transmitBuffer[12] = temp[2];
-		transmitBuffer[13] = temp[3]; 
+		transmitBuffer[11] = temp[0];
+		transmitBuffer[12] = temp[1];
+		transmitBuffer[13] = temp[2];
+		transmitBuffer[14] = temp[3]; 
 		
 		// Betriebsspannung
-		transmitBuffer[14] = vcc[0];
-		transmitBuffer[15] = vcc[1];
-		transmitBuffer[16] = vcc[2];
-		transmitBuffer[17] = vcc[3]; 
+		transmitBuffer[15] = vcc[0];
+		transmitBuffer[16] = vcc[1];
+		transmitBuffer[17] = vcc[2];
+		transmitBuffer[18] = vcc[3]; 
 
 		transmitBuffer[31] = generateChecksum((uint8_t *)transmitBuffer);
 

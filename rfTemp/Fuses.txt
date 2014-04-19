@@ -1,0 +1,4 @@
+Low Fuse     : 0xE2
+High Fuse    : 0xD7
+Extended Fuse: 0xFD
+Lockbits     : 0xFF

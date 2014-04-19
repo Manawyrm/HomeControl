@@ -13,7 +13,7 @@ uint8_t mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01 };
 EthernetServer server(80);
 EthernetUDP Udp;
 
-IPAddress homecontrolServer(10, 4, 3, 2); 
+IPAddress homecontrolServer(10, 4, 0, 5); 
 
 uint16_t transmitAddr;
 uint8_t payloadBuffer[33];
@@ -202,7 +202,7 @@ void setup()
 	}
 	Udp.begin(UDP_PORT);
 	// IP erhalten. Bereitschaft via UART melden.
-	//Serial.println("Got IP");
+	Serial.println("Got IP");
 
  //	 Serial.println();
 
